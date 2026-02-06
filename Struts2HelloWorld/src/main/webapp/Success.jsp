@@ -129,7 +129,7 @@ button:hover {
 
 <body>
 	<h3>All Records</h3>
-	<button onclick="location.href='SHOWAllRecords.jsp'">All Records</button>
+	<button onclick="location.href='ShowAllRecords.jsp'">All Records</button>
 </body>
 
 <body>

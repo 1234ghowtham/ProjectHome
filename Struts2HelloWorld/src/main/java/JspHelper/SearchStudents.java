@@ -132,7 +132,8 @@ public class SearchStudents {
 			
 		String studentDetailsKey = "studentId:" + studentDetailsMap.get("studentId");
 		String bookDetailsKey = "bookId:" + studentDetailsMap.get("bookId");
-		String borrowedDetailsKey = "studentId:" + studentDetailsMap.get("studentId") + ":bookId:" + studentDetailsMap.get("bookId");
+		String borrowedDetailsKey = "studentId:" + studentDetailsMap.get("studentId") + ":bookId:"
+				+ studentDetailsMap.get("bookId");
 
 		Map<String, String> studentData = new HashMap<>();
 		studentData.put("studentId", String.valueOf(studentDetailsMap.get("studentId")));

@@ -3,7 +3,6 @@ package JspHelper;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
-import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
@@ -13,6 +12,7 @@ import java.util.concurrent.TimeUnit;
 
 import dbconnection.DatabaseService;
 import redis.clients.jedis.Jedis;
+import redis.clients.jedis.exceptions.JedisConnectionException;
 import redisconnection.RedisService;
 
 public class ShowStudentBorrowedBooks {
@@ -20,7 +20,7 @@ public class ShowStudentBorrowedBooks {
 	public List<Map<String, Object>> getBorrowedBooks(int studentId) {
 		
 		List<Map<String, Object>> borrowedBooksList = new ArrayList<>();
-		Map<String, Object> recordMap = new HashMap<>();
+		
 		
 		Map<String, String> cachedDataMap = null;
 		Date currentDate = null; 
@@ -50,6 +50,8 @@ public class ShowStudentBorrowedBooks {
 		        
 			while (borrowedDetailsResultSet.next()) {
 				
+				Map<String, Object> recordMap = new HashMap<>();
+				
 				int bookId = borrowedDetailsResultSet.getInt("Book_id");
 				int borrowedCopies = borrowedDetailsResultSet.getInt("Copies_borrowed");
 				Date borrowDate = borrowedDetailsResultSet.getDate("borrow_date");
@@ -64,10 +66,10 @@ public class ShowStudentBorrowedBooks {
 				String borrowedBookDetailsCacheKey = "studentId:" + studentId + ":bookId:" + bookId;
 
 				if (redisClient != null) {
+					
 					try {
-						
 						cachedDataMap = redisClient.hgetAll(borrowedBookDetailsCacheKey);
-						
+
 						if ((cachedDataMap != null && cachedDataMap.containsKey("studentId"))) {
 							fromCache = true;
 							System.out.println("Fetched studentId " + studentId + " from Redis cache");
@@ -87,15 +89,15 @@ public class ShowStudentBorrowedBooks {
 					recordMap.put("fine", cachedDataMap.get("fine") != null ? Integer.parseInt(cachedDataMap.get("fine")) : 0);
 
 				} else {
-					
-					int fine = calculateFine(connection, redisClient != null ? redisClient : null, studentId, bookId,
+
+					int fine = calculateFine(connection, redisClient, studentId, bookId,
 							borrowDate, dueDate, currentDate);
 					recordMap.put("bookId", bookId);
 					recordMap.put("borrowedCopies", borrowedCopies);
 					recordMap.put("borrowDate", borrowDate);
 					recordMap.put("dueDate", dueDate);
 					recordMap.put("fine", fine);
-
+					
 					if (redisClient != null) {
 						try {
 							storingInCache(redisClient, studentId, bookId, recordMap);
@@ -107,7 +109,7 @@ public class ShowStudentBorrowedBooks {
 				
 				recordMap.put("fromCache", fromCache);
 				System.out.println(recordMap);
-				System.out.println(fromCache ? "Cache" : "Database");
+		
 				borrowedBooksList.add(recordMap);
 			}
 		}
@@ -120,7 +122,7 @@ public class ShowStudentBorrowedBooks {
 	}
 
 	private int calculateFine(Connection connection, Jedis redisClient, int studentId, int bookId, Date borrowDate,
-			Date dueDate, Date currentDate) throws SQLException {
+			Date dueDate, Date currentDate) {
 
 		String checkFineQuery = "SELECT * FROM fine WHERE student_id=? AND book_id=?";
 		String insertFineQuery = "INSERT INTO Fine(student_id, book_id, fine_amount) VALUES (?, ?, ?)";
@@ -139,6 +141,7 @@ public class ShowStudentBorrowedBooks {
 				ResultSet checkFineResultSet = checkFineStatement.executeQuery();
 
 				if (!checkFineResultSet.next()) {
+					
 					try (PreparedStatement insertFineStatement = connection.prepareStatement(insertFineQuery)) {
 						insertFineStatement.setInt(1, studentId);
 						insertFineStatement.setInt(2, bookId);
@@ -146,10 +149,15 @@ public class ShowStudentBorrowedBooks {
 						insertFineStatement.executeUpdate();
 					}
 				}
-			}
-
+			
 			if (redisClient != null) {
 				redisClient.hset("studentId:" + studentId + ":bookId:" + bookId, "fine", String.valueOf(fine));
+			}
+			
+			} catch (JedisConnectionException e) {
+				System.err.println(e.getMessage());
+			} catch (Exception e) {
+				e.printStackTrace();
 			}
 		}
 		
@@ -158,16 +166,22 @@ public class ShowStudentBorrowedBooks {
 
 	private void storingInCache(Jedis redisClient, int studentId, int bookId, Map<String, Object> recordMap) {
 		
-		String borrowDetailsCacheKey = "studentId:" + studentId + ":bookId:" + bookId;
-		
-		Map<String, String> dataMap = new HashMap<>();
-		
-		dataMap.put("bookId", String.valueOf(recordMap.get("bookId")));
-		dataMap.put("borrowedCopies", String.valueOf(recordMap.get("borrowedCopies")));
-		dataMap.put("borrowDate", recordMap.get("borrowDate") != null ? recordMap.get("borrowDate").toString() : "null");
-		dataMap.put("dueDate", recordMap.get("dueDate") != null ? recordMap.get("dueDate").toString() : "null");
-		dataMap.put("fine", String.valueOf(recordMap.get("fine")));
-		
-		redisClient.hmset(borrowDetailsCacheKey, dataMap);
+		try {
+			
+			String borrowDetailsCacheKey = "studentId:" + studentId + ":bookId:" + bookId;
+			
+			Map<String, String> dataMap = new HashMap<>();
+			
+			dataMap.put("bookId", String.valueOf(recordMap.get("bookId")));
+			dataMap.put("borrowedCopies", String.valueOf(recordMap.get("borrowedCopies")));
+			dataMap.put("borrowDate", recordMap.get("borrowDate") != null ? recordMap.get("borrowDate").toString() : "null");
+			dataMap.put("dueDate", recordMap.get("dueDate") != null ? recordMap.get("dueDate").toString() : "null");
+			dataMap.put("fine", String.valueOf(recordMap.get("fine")));
+			
+			redisClient.hmset(borrowDetailsCacheKey, dataMap);
+
+		} catch (JedisConnectionException e) {
+			System.err.println(e.getMessage());
+		}
 	}
 }

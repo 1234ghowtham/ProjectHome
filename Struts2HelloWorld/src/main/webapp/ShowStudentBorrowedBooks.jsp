@@ -80,6 +80,7 @@ td[colspan='5'] {
 	Integer studentId = (Integer) session.getAttribute("studentId");
 
 	List<Map<String, Object>> records = show.getBorrowedBooks(studentId);
+	System.out.println(records);
 	%>
 
 	<table>

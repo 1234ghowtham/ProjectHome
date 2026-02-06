@@ -164,9 +164,7 @@ System.out.println("studentId = " + record.get("studentId"));
 			<%
 			}
 			}
-			%>
-			
-		
+			%>	
 
 	</table>
 	<input type="button" value="Back"

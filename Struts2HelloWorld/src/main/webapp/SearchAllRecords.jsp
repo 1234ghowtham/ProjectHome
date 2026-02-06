@@ -142,7 +142,7 @@ input[type="button"]:hover {
 		
 	</table>
 	<input type="button" value="Back"
-		onclick="window.location.href='AllRecords.jsp'" />
+		onclick="window.location.href='ShowAllRecords.jsp'" />
 	<input type="button" value="Home"
 		onclick="window.location.href='index.jsp'" />
 </body>

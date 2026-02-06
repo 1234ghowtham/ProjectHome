@@ -13,6 +13,7 @@ import java.util.concurrent.TimeUnit;
 
 import dbconnection.DatabaseService;
 import redis.clients.jedis.Jedis;
+import redis.clients.jedis.exceptions.JedisConnectionException;
 import redisconnection.RedisService;
 
 public class ShowStudents {
@@ -41,7 +42,7 @@ public class ShowStudents {
 				PreparedStatement studentDetailsStatement = connection.prepareStatement(getStudentDetailsQuery);
 				ResultSet currentDateResultSet = currentDateStatement.executeQuery();
 				ResultSet studentDetailsResultSet = studentDetailsStatement.executeQuery()) {
-				
+
 				if (currentDateResultSet.next()) {
 					 currentDate = currentDateResultSet.getDate(1);
 					 System.out.println("Executing query for all students...");
@@ -98,25 +99,33 @@ public class ShowStudents {
 					int fine = 0;
 					
 					if (borrowDate != null && currentDate.after(dueDate)) {
+
 						long daysDifference = TimeUnit.MILLISECONDS.toDays(currentDate.getTime() - dueDate.getTime());
 						fine = (int) daysDifference * 10; // ₹10 per day
 						recordMap.put("fine", fine);
 						updateFineInDB(connection, studentId, bookId, fine);
+
 					} else {
 						recordMap.put("fine", 0);
 					}
-
-					if (redisClient != null) {
-						storingInCache(redisClient, recordMap);
+					
+					try {
+						if (redisClient != null) {
+							storingInCache(redisClient, recordMap);
+						}
+					} catch (JedisConnectionException e) {
+						System.err.println("Redis access failed. Ignoring Redis. " + e.getMessage());
 					}
+					
 				}
-
 				recordMap.put("fromCache", fromCache);
 				System.out.println(recordMap);
 				System.out.println(fromCache ? "Cache" : "Database");
 				recordList.add(recordMap);
 			}
 
+		} catch (JedisConnectionException e) {
+			System.err.println("Redis access failed. Ignoring Redis. " + e.getMessage());
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
